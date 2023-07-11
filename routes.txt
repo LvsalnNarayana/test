@@ -1,0 +1,186 @@
+Basic Routes:
+
+User Registration: 
+POST /api/users/register
+
+User Login: 
+POST /api/users/login
+
+User Logout: 
+POST /api/users/logout
+
+Get User Profile: 
+GET /api/users/:userId
+
+Update User Profile: 
+PUT /api/users/:userId
+
+Create a Post: 
+POST /api/posts
+
+Get a Post: 
+GET /api/posts/:postId
+
+Update a Post: 
+PUT /api/posts/:postId
+
+Delete a Post: 
+DELETE /api/posts/:postId
+
+Like a Post: 
+POST /api/posts/:postId/like
+
+Unlike a Post: 
+POST /api/posts/:postId/unlike
+
+Comment on a Post: 
+POST /api/posts/:postId/comments
+
+Reply to a Comment: 
+POST /api/comments/:commentId/replies
+
+Follow a User: 
+POST /api/users/:userId/follow
+
+Unfollow a User: 
+POST /api/users/:userId/unfollow
+
+
+Complex Routes:
+
+Get User Feed: 
+GET /api/feed
+
+Get User's Followers: 
+GET /api/users/:userId/followers
+
+Get User's Following: 
+GET /api/users/:userId/following
+
+Search Users: 
+GET /api/users/search?q=:searchQuery
+
+Get User's Posts: 
+GET /api/users/:userId/posts
+
+Get Post Likes: 
+GET /api/posts/:postId/likes
+
+Get Post Comments: 
+GET /api/posts/:postId/comments
+
+
+Get Comment Replies: 
+GET /api/comments/:commentId/replies
+
+
+Delete a Comment: 
+DELETE /api/comments/:commentId
+
+
+Delete a Reply: 
+DELETE /api/replies/:replyId
+
+
+
+
+
+Basic Friends Routes:
+
+Send Friend Request: 
+POST /api/friends/send-request
+Body: { "senderId": "senderUserId", "receiverId": "receiverUserId" }
+
+Accept Friend Request: 
+POST /api/friends/accept-request
+Body: { "senderId": "senderUserId", "receiverId": "receiverUserId" }
+
+Reject Friend Request: 
+POST /api/friends/reject-request
+Body: { "senderId": "senderUserId", "receiverId": "receiverUserId" }
+
+Remove Friend: 
+DELETE /api/friends/remove
+Body: { "userId": "loggedInUserId", "friendId": "friendUserId" }
+
+Get Friends List: 
+GET /api/friends/:userId
+Check Friendship Status: GET /api/friends/check-status
+
+Query parameters: user1Id, user2Id
+
+Notification Routes:
+
+Get Notifications:
+GET /api/notifications
+Retrieves all notifications for the authenticated user
+
+Mark Notification as Read: 
+PUT /api/notifications/:notificationId/mark-read
+Marks a specific notification as read
+
+Delete Notification: 
+DELETE /api/notifications/:notificationId
+Deletes a specific notification
+
+Complex Friends Routes:
+
+Get Mutual Friends: 
+GET /api/friends/mutual
+Query parameters: user1Id, user2Id
+Retrieves the list of mutual friends between two users
+
+Get Pending Friend Requests: 
+GET /api/friends/pending-requests/:userId
+Retrieves the list of pending friend requests for a user
+
+Get Sent Friend Requests: 
+GET /api/friends/sent-requests/:userId
+Retrieves the list of sent friend requests by a user
+
+Get Friends-of-Friends: 
+GET /api/friends/friends-of-friends/:userId
+Retrieves the list of friends-of-friends for a user
+
+
+
+
+Pagination for Posts: 
+GET /api/posts?page=:page&limit=:limit
+Implements pagination for retrieving posts in chunks, reducing the data transferred in each request.
+
+Lazy Loading for Posts: 
+GET /api/posts/lazy-load?lastPostId=:lastPostId&limit=:limit
+Loads more posts incrementally as the user scrolls, reducing the initial page load time.
+
+Explore Trending Posts: 
+GET /api/posts/explore/trending
+Retrieves trending or popular posts based on certain criteria, such as likes, comments, or engagement.
+
+Explore Recommendations: 
+GET /api/posts/explore/recommendations
+Provides personalized recommendations for users based on their interests, interactions, or social graph.
+
+Search Posts: 
+GET /api/posts/search?q=:searchQuery
+Enables users to search for posts based on keywords or specific criteria.
+
+Notifications Count: 
+GET /api/notifications/count
+Retrieves the count of unread notifications for the authenticated user without fetching the entire notification data.
+
+Delete Multiple Posts: 
+DELETE /api/posts/bulk-delete
+Allows users to delete multiple posts in a single request, reducing round-trips to the server.
+
+Update User Settings: 
+PUT /api/users/:userId/settings
+Allows users to update their preferences and settings, such as notification preferences or privacy settings.
+
+Follow Suggestions: 
+GET /api/users/follow-suggestions
+Provides a list of suggested users to follow based on various factors like mutual friends, common interests, or popular users.
+
+Analytics and Insights: 
+GET /api/analytics/posts or GET /api/analytics/users
+Retrieves analytics data and insights about posts or users, such as post engagement, user activity, or demographics.
