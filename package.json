@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node app.js",
+    "start": "node seed.js",
+    "start:reset": "node reset.js",
     "start:dev": "nodemon app.js"
   },
   "keywords": [],
@@ -21,11 +22,14 @@
     "express-async-handler": "^1.2.0",
     "express-session": "^1.17.3",
     "helmet": "^7.0.0",
+    "joi": "^17.9.2",
     "lodash": "^4.17.21",
+    "moment": "^2.29.4",
     "mongoose": "^7.3.2",
     "socket.io": "^4.7.1"
   },
   "devDependencies": {
+    "@faker-js/faker": "^8.0.2",
     "nodemon": "^3.0.1"
   }
 }

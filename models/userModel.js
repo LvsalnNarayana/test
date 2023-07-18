@@ -3,6 +3,8 @@ import Request from "./requestModel.js";
 import Notification from "./notificationModel.js";
 import Post from "./postModel.js";
 import Event from "./eventModel.js";
+import bcryptjs from 'bcryptjs';
+import moment from 'moment';
 
 // Define the User schema
 const userSchema = new mongoose.Schema(
@@ -39,13 +41,14 @@ const userSchema = new mongoose.Schema(
         // Date of Birth field
         dateOfBirth: {
             type: Date,
+            required: true
         },
         // Gender field
         gender: {
             type: String,
             enum: ["male", "female", "other"],
         },
-        // Mobile field
+        // Mobile fields
         mobile: {
             type: String,
             validate: {
@@ -58,8 +61,6 @@ const userSchema = new mongoose.Schema(
         // Country field
         country: {
             type: String,
-            enum: ["USA", "Canada", "UK", "Australia", "India", "Other"],
-            default: "Other",
         },
         // Lives In field
         livesIn: {
@@ -117,6 +118,12 @@ const userSchema = new mongoose.Schema(
                 },
                 checkInDate: {
                     type: Date,
+                    get: function (value) {
+                        return moment(value).format("DD-MMMM-YYYY");
+                    },
+                    set: function (value) {
+                        return moment(value, "DD-MMMM-YYYY").toDate();
+                    },
                 },
             },
         ],
@@ -199,253 +206,181 @@ const userSchema = new mongoose.Schema(
         timestamps: true,
     }
 );
+userSchema.index({ username: 'text' }, { textSearchOptions: { minWordLength: 1 } });
 
-// Middleware to populate all fields before find, findById, findOneAndUpdate
-// userSchema.pre(/^find/, function (next) {
-//     this.populate("friends")
-//         .populate("events")
-//         .populate("notifications")
-//         .populate("posts")
-//         .populate("saved_posts");
-//     next();
-// });
-
+//=============================================
+//_____________  encrypt password  ___________
+//=============================================
+userSchema.pre("save", async function (next) {
+    if (!this.isModified("password")) {
+        next();
+    }
+    const salt = await bcryptjs.genSalt(10);
+    this.password = await bcryptjs.hash(this.password, salt);
+    next()
+});
 
 // Transform Methods
-userSchema.options.toJSON.transform = function (doc, ret) {
-    // Remove sensitive fields from the JSON response
+userSchema.options.toJSON.transform = function (doc, ret, options) {
     delete ret._id;
+    delete ret.__v;
     delete ret.password;
     delete ret.email;
-
+    delete ret.updatedAt;
+    if (options.includePassword === true) {
+        ret.password = doc.password;
+    }
     return ret;
 };
 
-userSchema.options.toObject.transform = function (doc, ret) {
-    // Remove sensitive fields from the object representation
+userSchema.options.toObject.transform = function (doc, ret, options) {
     delete ret._id;
+    delete ret.__v;
     delete ret.password;
+    delete ret.updatedAt;
     delete ret.email;
-
+    if (options.includePassword === true) {
+        ret.password = doc.password;
+    }
     return ret;
 };
-// Query Methods
 
-// Query method to search users by username and check relationship status with the session user
-// userSchema.query.byUsername = function (username, sessionUser) {
-//     const regex = new RegExp(username, "i");
-//     const query = this.where({ username: regex });
-//     // Check relationship status with the session user
-//     if (sessionUser) {
-//         query
-//             .populate({
-//                 path: "friends",
-//                 match: { _id: sessionUser._id },
-//             })
-//             .populate({
-//                 path: "requests",
-//                 match: {
-//                     $or: [{ sender: sessionUser._id }, { receiver: sessionUser._id }],
-//                 },
-//             });
-//     }
-
-//     return query;
-// };
-
-// userSchema.query.byEmail = function (email) {
-//     return this.where({ email });
-// };
 //Static Methods
 
 //====================================================
 // User Find Methods With Relation
 //====================================================
-// Static method to find a user by email and check relationship status with the session user
-userSchema.statics.findByEmail = async function (email, sessionUser) {
-    const query = this.findOne({ email });
-
-    // Check relationship status with the session user
-    if (sessionUser) {
-        query
-            .populate({
-                path: "friends",
-                match: { _id: sessionUser._id },
-            })
-            .populate({
-                path: "requests",
-                match: {
-                    $or: [{ sender: sessionUser._id }, { receiver: sessionUser._id }],
-                },
-            });
-    }
-
-    // Add the count of mutual friends
-    if (sessionUser) {
-        const user = await query.exec();
-        if (user && !user._id.equals(sessionUser._id)) {
-            const mutualFriends = user.friends.filter((friend) =>
-                friend.friends.includes(sessionUser._id)
-            );
-            const mutualFriendsCount = mutualFriends.length;
-            user.mutualFriendsCount = mutualFriendsCount;
-            user.mutualFriends = mutualFriends.map((friend) => ({
-                _id: friend._id,
-                username: friend.username,
-            }));
+userSchema.statics.loginUser = async function (userData) {
+    try {
+        const user = await User.findOne({
+            $or: [{ username: userData }, { email: userData }],
+        }).select('username password').exec();
+        if (user) {
+            return user.toObject({ includePassword: true });
+        } else {
+            throw new Error("User not Found")
         }
-        user.loggedIn = user && user._id.equals(sessionUser._id);
-        const relations = await this.checkUserRelations(user._id, sessionUser._id);
-        user.relations = relations;
-        return user;
+    } catch (error) {
+        throw new Error(error.message)
     }
-    return query;
-};
-
+}
 // Static method to find a user by username and check relationship with the session user
-userSchema.statics.findByUsername = function (username, sessionUser) {
-    const query = User.findOne({ username: username });
-    console.log("hello");
-    // Check relationship status with the session user
-    // if (sessionUser) {
-    //     query
-    //         .populate({
-    //             path: "friends",
-    //             match: { _id: sessionUser._id },
-    //         })
-    //         .populate({
-    //             path: "requests",
-    //             match: {
-    //                 $or: [{ sender: sessionUser._id }, { receiver: sessionUser._id }],
-    //             },
-    //         });
-    // }
-    // // Add the count of mutual friends
-    // if (sessionUser) {
-    //     const user = await query.exec();
-    //     if (user && !user._id.equals(sessionUser._id)) {
-    //         const mutualFriends = user.friends.filter((friend) =>
-    //             friend.friends.includes(sessionUser._id)
-    //         );
-    //         const mutualFriendsCount = mutualFriends.length;
-    //         user.mutualFriendsCount = mutualFriendsCount;
-    //         user.mutualFriends = mutualFriends.map((friend) => ({
-    //             _id: friend._id,
-    //             username: friend.username,
-    //         }));
-    //     }
-    //     user.loggedIn = user && user._id.equals(sessionUser._id);
+userSchema.statics.findByUsername = async function (userData, sessionUser) {
+    try {
+        const query = await User.findOne({
+            $or: [{ username: userData }, { email: userData }],
+        })
+            .populate('friends', 'username friends')
+            .populate({
+                path: 'posts',
+                match: {
+                    $or: [{ post_type: 'friends' }, { post_type: 'public' }],
+                },
+                options: {
+                    sort: { createdAt: -1 },
+                },
+            })
+            .exec();
+        const user = query.toObject();
 
-    //     const relations = await this.checkUserRelations(user._id, sessionUser._id);
-    //     user.relations = relations;
+        // Loop through the posts
+        user.posts = user.posts.map((post) => {
+            const isPostLikedByUser = post.likes.some((like) => like.toString() === sessionUser);
 
-    //     return user;
-    // }
+            const transformedComments = post.comments.map((comment) => {
+                const isCommentAuthor = comment.user.id === sessionUser;
+                const isCommentLikedByUser = comment.likes.some((like) => like.toString() === sessionUser);
 
-    return query;
+                const transformedReplies = comment.replies.map((reply) => {
+                    const isReplyAuthor = reply.user.id === sessionUser;
+                    const isReplyLikedByUser = reply.likes.some((like) => like.toString() === sessionUser);
+
+                    return {
+                        ...reply,
+                        likedByUser: isReplyLikedByUser,
+                        author: isReplyAuthor,
+                    };
+                });
+
+                return {
+                    ...comment,
+                    likedByUser: isCommentLikedByUser,
+                    author: isCommentAuthor,
+                    replies: transformedReplies,
+                };
+            });
+
+            return {
+                ...post,
+                likedByUser: isPostLikedByUser,
+                owner: post.user.id === sessionUser,
+                comments: transformedComments,
+            };
+        });
+
+        if (user?.id !== sessionUser) {
+            const relation = await User.checkUserRelations(user?.id, sessionUser)
+            return { ...user, ...relation, loggedIn: false }
+        } else {
+            return { ...user, loggedIn: true }
+        }
+    } catch (error) {
+        throw new Error(error?.message)
+    }
+
+
 };
 
 // Static method to search users and check relationship status with the session user
 userSchema.statics.search = async function (query, sessionUser) {
-    const searchQuery = this.find({ $text: { $search: query } }).sort({
-        score: { $meta: "textScore" },
-    });
-
-    // Check relationship status with the session user
-    if (sessionUser) {
-        searchQuery
-            .populate({
-                path: "friends",
-                match: { _id: sessionUser._id },
-            })
-            .populate({
-                path: "requests",
-                match: {
-                    $or: [{ sender: sessionUser._id }, { receiver: sessionUser._id }],
-                },
-            });
-    }
-
-    // Add the count of mutual friends to each user
-    if (sessionUser) {
-        const users = await searchQuery.exec();
-        for (const user of users) {
-            if (!user._id.equals(sessionUser._id)) {
-                const mutualFriends = user.friends.filter((friend) =>
-                    friend.friends.includes(sessionUser._id)
-                );
-                const mutualFriendsCount = mutualFriends.length;
-                user.mutualFriendsCount = mutualFriendsCount;
-                user.mutualFriends = mutualFriends.map((friend) => ({
-                    _id: friend._id,
-                    username: friend.username,
-                }));
+    const searchQuery = await User.find({ $text: { $search: query, $caseSensitive: false } })
+        .select('username')
+        .sort({ score: { $meta: 'textScore' } });
+    const mappedResults = await Promise.all(
+        searchQuery.map(async (queryData) => {
+            if (queryData?.id !== sessionUser) {
+                const relation = await User.checkUserRelations(queryData?.id, sessionUser);
+                return { ...queryData.toObject(), ...relation };
+            } else {
+                return queryData.toObject();
             }
-            user.loggedIn = user && user._id.equals(sessionUser._id);
+        })
+    );
 
-            const relations = await this.checkUserRelations(
-                user._id,
-                sessionUser._id
-            );
-            user.relations = relations;
-        }
-        return users;
-    }
-
-    return searchQuery;
+    return mappedResults;
 };
 
 // Static method to check complex relationships between two users
-userSchema.statics.checkUserRelations = async function (user1Id, user2Id) {
+userSchema.statics.checkUserRelations = async function (user1Id, sessionUser) {
     try {
-        const user1 = await this.findById(user1Id);
-        const user2 = await this.findById(user2Id);
-
-        if (!user1 || !user2) {
+        const user1 = await User.findById(user1Id).populate('friends', 'username friends').select('username friends').exec();
+        const sessionuser = await User.findById(sessionUser).populate('friends', 'username friends').select('username friends').exec();
+        if (!user1 || !sessionuser) {
             throw new Error("User not found.");
         }
-
-        const isFriend = user1.friends.includes(user2Id);
-        const isRequestedByUser1 = await Request.exists({
-            sender: user2Id,
+        const isFriend = user1?.friends?.some(friend => friend.id === sessionUser);
+        const mutualFriends = user1.friends.filter((friend) => friend?.friends?.includes(sessionUser)).map((friend) => {
+            return {
+                id: friend?.id,
+                username: friend?.username
+            }
+        });
+        const sent = await Request.exists({
+            sender: sessionUser,
             receiver: user1Id,
         });
-        const isRequestedByUser2 = await Request.exists({
+        const received = await Request.exists({
             sender: user1Id,
-            receiver: user2Id,
+            receiver: sessionUser,
         });
-
-        const response = {
-            user1Id: user1._id,
-            user2Id: user2._id,
-            user1Username: user1.username,
-            user2Username: user2.username,
-            isFriend,
-            isRequestedByUser1,
-            isRequestedByUser2,
-        };
-
-        // Add mutual friends if users are not the same
-        if (!user1._id.equals(user2._id)) {
-            const mutualFriendsUser1 = user1.friends.filter((friend) =>
-                friend.friends.includes(user2._id)
-            );
-            const mutualFriendsUser2 = user2.friends.filter((friend) =>
-                friend.friends.includes(user1._id)
-            );
-            response.mutualFriendsUser1 = mutualFriendsUser1.map((friend) => ({
-                _id: friend._id,
-                username: friend.username,
-            }));
-            response.mutualFriendsUser2 = mutualFriendsUser2.map((friend) => ({
-                _id: friend._id,
-                username: friend.username,
-            }));
+        const relation = {
+            friend: isFriend,
+            mutual_friends: mutualFriends,
+            request_status: sent ? 'sent' : (received ? 'received' : 'none')
         }
-
-        return response;
+        return relation;
     } catch (error) {
-        throw new Error("Failed to check user relationships: " + error.message);
+        throw new Error(error.message);
     }
 };
 
@@ -453,32 +388,10 @@ userSchema.statics.checkUserRelations = async function (user1Id, user2Id) {
 // Friend Methods
 //====================================================
 
-// Static method to add a friend to a user's friends list
-userSchema.statics.addFriend = async function (userId, friendId) {
-    try {
-        const user = await this.findById(userId);
-
-        if (!user) {
-            throw new Error("User not found.");
-        }
-
-        if (user.friends.includes(friendId)) {
-            throw new Error("Friend already exists in the user's friends list.");
-        }
-
-        user.friends.push(friendId);
-        await user.save();
-
-        return user;
-    } catch (error) {
-        throw new Error("Failed to add friend to user: " + error.message);
-    }
-};
-
 // Static method to get all friends of a user
-userSchema.statics.getAllFriends = async function (userId) {
+userSchema.statics.getAllFriends = async function (sessionUser) {
     try {
-        const user = await this.findById(userId).populate("friends");
+        const user = await User.findById(sessionUser).populate("friends", 'username').select('friends');
         if (!user) {
             throw new Error("User not found.");
         }
@@ -488,123 +401,111 @@ userSchema.statics.getAllFriends = async function (userId) {
     }
 };
 
+//====================================================
+// Request Methods
+//====================================================
+
 // Static method to get all friend requests of a user
-userSchema.statics.getAllFriendRequests = async function (userId) {
+userSchema.statics.getAllFriendRequests = async function (sessionUser) {
     try {
-        const user = await this.findById(userId).populate("requests");
+        const user = await User.findById(sessionUser);
         if (!user) {
             throw new Error("User not found.");
         }
-        return user.requests;
+        const requests = await Request.find({ receiver: sessionUser, status: 'pending' }).populate('sender', 'username').select('sender receiver').exec();
+        const newRequests = await Promise.all(requests.map(async (request) => {
+            const relation = await User.checkUserRelations(request?.sender?.id, sessionUser);
+            return { id: request.toObject()?.id, sender: { ...request.sender.toObject(), ...relation } };
+        }));
+        return newRequests;
     } catch (error) {
         throw new Error("Failed to get user friend requests: " + error.message);
     }
+
 };
 
-// Static method to get a friend by ID
-userSchema.statics.getFriendById = async function (userId, friendId) {
+// Static method to send a friend request
+userSchema.statics.sendRequest = async function (requestData) {
     try {
-        const user = await this.findById(userId).populate({
-            path: "friends",
-            match: { _id: friendId },
-        });
-        if (!user) {
+        const sender = await User.findById(requestData.senderId).select('username friends');
+        const receiver = await User.findById(requestData.receiverId).select('username friends');
+        if (!sender || !receiver) {
             throw new Error("User not found.");
         }
-        const friend = user.friends.find((friend) => friend._id.equals(friendId));
-        if (!friend) {
-            throw new Error("Friend not found.");
+        if (sender.friends.includes(requestData.receiverId)) {
+            throw new Error("Friend already exists in the user's friends list.");
         }
-        return friend;
-    } catch (error) {
-        throw new Error("Failed to get friend by ID: " + error.message);
-    }
-};
-
-// Static method to get a friend request by ID
-userSchema.statics.getFriendRequestById = async function (
-    userId,
-    friendRequestId
-) {
-    try {
-        const user = await this.findById(userId).populate({
-            path: "requests",
-            match: { _id: friendRequestId },
+        const existingRequest = await Request.findOne({
+            sender: requestData.senderId,
+            receiver: requestData.receiverId,
+            status: 'rejected'
         });
-        if (!user) {
-            throw new Error("User not found.");
+        const notificationData = {
+            message: sender?.toObject()?.username + ' has sent you friend request',
+            userId: receiver?.id,
+            sender: sender?.username
         }
-        const friendRequest = user.requests.find((friendRequest) =>
-            friendRequest._id.equals(friendRequestId)
-        );
-        if (!friendRequest) {
-            throw new Error("Friend request not found.");
+        if (existingRequest && existingRequest?.status === 'rejected') {
+            const updateRequest = await Request.findOneAndUpdate({ sender: requestData.senderId, receiver: requestData.receiverId }, { status: 'pending' }, { new: true });
+            await Notification.createRequestNotification({ ...notificationData, typeId: updateRequest?.id })
+            return updateRequest
         }
-        return friendRequest;
+        const newRequest = await Request.createRequest(requestData);
+        await Notification.createRequestNotification({ ...notificationData, typeId: newRequest?.id })
+        return newRequest;
     } catch (error) {
-        throw new Error("Failed to get friend request by ID: " + error.message);
+        throw new Error(error.message);
     }
 };
 
 // Static method to accept a friend request
-userSchema.statics.acceptFriendRequest = async function (userId, friendId) {
+userSchema.statics.acceptRequest = async function (requestData) {
+    const { userId, sessionUser, requestId } = requestData;
     try {
-        // Update user1's friends and remove the friendId from requests
-        await this.findByIdAndUpdate(userId, { $push: { friends: friendId } });
-        await Request.findOneAndDelete({ sender: friendId, receiver: userId });
-        // Update user2's friends and remove the userId from sentRequests
-        await this.findByIdAndUpdate(friendId, { $push: { friends: userId } });
-        await Request.findOneAndDelete({ sender: userId, receiver: friendId });
-        return true; // Return true to indicate successful acceptance
+        if (userId !== sessionUser) {
+            const sender = await User.findById(userId).select('username');
+            const receiver = await User.findById(sessionUser).select('username');
+            const request = await Request.findOneAndUpdate({ sender: userId, receiver: sessionUser, _id: requestId }, { status: 'accepted' }, { new: true });
+            if (sender && receiver && request) {
+                const notificationData = {
+                    message: receiver?.toObject()?.username + ' has aceepted your friend request',
+                    typeId: requestId,
+                    userId: sender?.id,
+                    sender: receiver?.username
+                }
+                await Notification.createRequestNotification(notificationData);
+                await User.findByIdAndUpdate(userId, { $addToSet: { friends: sessionUser } });
+                await User.findByIdAndUpdate(sessionUser, { $addToSet: { friends: userId } });
+            } else {
+                throw new Error("Request Not Found")
+            }
+            return request;
+        } else {
+            throw new Error("sessionUser and UserId are same")
+        }
     } catch (error) {
-        throw new Error("Failed to accept friend request: " + error.message);
+        throw new Error(error.message);
     }
 };
 
 // Static method to reject a friend request
-userSchema.statics.rejectFriendRequest = async function (userId, friendId) {
+userSchema.statics.rejectRequest = async function (requestData) {
+    const { userId, sessionUser, requestId } = requestData;
     try {
-        // Remove the friendId from requests
-        await Request.findOneAndDelete({ sender: friendId, receiver: userId });
-        // Remove the userId from sentRequests
-        await Request.findOneAndDelete({ sender: userId, receiver: friendId });
-        return true; // Return true to indicate successful rejection
+        const rejected_request = await Request.findOneAndUpdate({ sender: userId, receiver: sessionUser, _id: requestId }, { status: 'rejected' }, { new: true });
+        return rejected_request;
     } catch (error) {
         throw new Error("Failed to reject friend request: " + error.message);
     }
 };
 
-// Static method to send a friend request
-userSchema.statics.sendFriendRequest = async function (senderId, receiverId) {
-    try {
-        const sender = await this.findById(senderId);
-        const receiver = await this.findById(receiverId);
-        if (!sender || !receiver) {
-            throw new Error("User not found.");
-        }
-        // Check if a friend request already exists
-        const existingRequest = await Request.findOne({
-            sender: senderId,
-            receiver: receiverId,
-        });
-        if (existingRequest) {
-            throw new Error("Friend request already sent.");
-        }
-        // Create a new friend request
-        const newRequest = new Request({ sender: senderId, receiver: receiverId });
-        await newRequest.save();
-        return true; // Return true to indicate successful request sending
-    } catch (error) {
-        throw new Error("Failed to send friend request: " + error.message);
-    }
-};
-
 // Static method to cancel a friend request
-userSchema.statics.cancelFriendRequest = async function (senderId, receiverId) {
+userSchema.statics.cancelRequest = async function (requestData) {
+    const { userId, sessionUser, requestId } = requestData;
     try {
-        // Remove the friend request document
-        await Request.findOneAndDelete({ sender: senderId, receiver: receiverId });
-        return true; // Return true to indicate successful cancellation
+        await Request.findOneAndDelete({ sender: sessionUser, receiver: userId });
+        await Notification.findOneAndDelete({ typeId: requestId, userId: userId, type: 'request' });
+        return true;
     } catch (error) {
         throw new Error("Failed to cancel friend request: " + error.message);
     }
@@ -613,12 +514,12 @@ userSchema.statics.cancelFriendRequest = async function (senderId, receiverId) {
 // Static method to get a user's friend suggestions with the number of mutual friends
 userSchema.statics.getFriendSuggestions = async function (userId) {
     try {
-        const user = await this.findById(userId);
+        const user = await User.findById(userId);
         if (!user) {
             throw new Error("User not found.");
         }
         // Retrieve the friends of user's friends
-        const friendsOfFriends = await this.find({
+        const friendsOfFriends = await User.find({
             _id: { $nin: user.friends },
         }).populate("friends", "username");
         // Find friend suggestions based on mutual friends
@@ -638,30 +539,10 @@ userSchema.statics.getFriendSuggestions = async function (userId) {
     }
 };
 
-// Static method to get common friends between two users
-userSchema.statics.getCommonFriends = async function (user1Id, user2Id) {
-    try {
-        const user1 = await this.findById(user1Id).populate("friends", "username");
-        const user2 = await this.findById(user2Id).populate("friends", "username");
-
-        if (!user1 || !user2) {
-            throw new Error("User not found.");
-        }
-
-        const commonFriends = user1.friends.filter((friend1) =>
-            user2.friends.some((friend2) => friend2._id.equals(friend1._id))
-        );
-
-        return commonFriends;
-    } catch (error) {
-        throw new Error("Failed to get common friends: " + error.message);
-    }
-};
-
 // Static method to count the number of friends for a user
 userSchema.statics.countFriends = async function (userId) {
     try {
-        const user = await this.findById(userId);
+        const user = await User.findById(userId);
         if (!user) {
             throw new Error("User not found.");
         }
@@ -679,7 +560,7 @@ userSchema.statics.countFriends = async function (userId) {
 // Static method to add an event to a user's events list
 userSchema.statics.addEvent = async function (userId, eventId) {
     try {
-        const user = await this.findById(userId);
+        const user = await User.findById(userId);
 
         if (!user) {
             throw new Error("User not found.");
@@ -701,7 +582,7 @@ userSchema.statics.addEvent = async function (userId, eventId) {
 // Static method to get all events of a user
 userSchema.statics.getAllEvents = async function (userId) {
     try {
-        const user = await this.findById(userId).populate("events");
+        const user = await User.findById(userId).populate("events");
         if (!user) {
             throw new Error("User not found.");
         }
@@ -710,10 +591,11 @@ userSchema.statics.getAllEvents = async function (userId) {
         throw new Error("Failed to get user events: " + error.message);
     }
 };
+
 // Static method to get an event by ID
 userSchema.statics.getEventById = async function (userId, eventId) {
     try {
-        const user = await this.findById(userId).populate({
+        const user = await User.findById(userId).populate({
             path: "events",
             match: { _id: eventId },
         });
@@ -734,50 +616,65 @@ userSchema.statics.getEventById = async function (userId, eventId) {
 // Notification Methods
 //====================================================
 
-// Static method to add a notification to a user's notifications list
-userSchema.statics.addNotification = async function (userId, notificationId) {
-    try {
-        const user = await this.findById(userId);
-
-        if (!user) {
-            throw new Error("User not found.");
-        }
-
-        if (user.notifications.includes(notificationId)) {
-            throw new Error(
-                "Notification already exists in the user's notifications list."
-            );
-        }
-
-        user.notifications.push(notificationId);
-        await user.save();
-
-        return user;
-    } catch (error) {
-        throw new Error("Failed to add notification to user: " + error.message);
-    }
-};
-
 // Static method to get all notifications of a user
 userSchema.statics.getAllNotifications = async function (userId) {
     try {
-        const user = await this.findById(userId).populate("notifications");
-        if (!user) {
-            throw new Error("User not found.");
+        const notifications = await Notification.getNotifications(userId);
+        if (!notifications) {
+            throw new Error("Notifications not found.");
         }
-        return user.notifications;
+        return notifications;
     } catch (error) {
         throw new Error("Failed to get user notifications: " + error.message);
     }
 };
-
+userSchema.statics.markAllAsRead = async function (userId) {
+    try {
+        const notifications = await Notification.markAllAsRead(userId);
+        return notifications;
+    } catch (error) {
+        throw new Error(error?.message)
+    }
+}
+userSchema.statics.markAsRead = async function (notificationId, userId) {
+    try {
+        const notification = await Notification.markAsRead(notificationId, userId);
+        return notification;
+    } catch (error) {
+        throw new Error(error?.message);
+    }
+}
+userSchema.statics.findUnreadNotifications = async function (userId) {
+    try {
+        const notification = await Notification.findUnreadNotifications(userId);
+        return notification;
+    } catch (error) {
+        throw new Error(error?.message);
+    }
+}
+userSchema.statics.deleteNotification = async function (notificationId, userId) {
+    try {
+        const notification = await Notification.deleteNotification(notificationId, userId);
+        return notification;
+    } catch (error) {
+        throw new Error(error?.message);
+    }
+}
+userSchema.statics.deleteAllNotifications = async function (userId) {
+    try {
+        await Notification.deleteAllNotifications(userId);
+        return { success: true };
+    } catch (error) {
+        throw new Error(error?.message);
+    }
+}
 // Static method to get a notification by ID
 userSchema.statics.getNotificationById = async function (
     userId,
     notificationId
 ) {
     try {
-        const user = await this.findById(userId).populate({
+        const user = await User.findById(userId).populate({
             path: "notifications",
             match: { _id: notificationId },
         });
@@ -796,171 +693,19 @@ userSchema.statics.getNotificationById = async function (
     }
 };
 
+
 //====================================================
 // Post Methods
 //====================================================
 
-// Static method to add a post to a user's posts list
-userSchema.statics.addPost = async function (userId, postId) {
-    try {
-        const user = await this.findById(userId);
-
-        if (!user) {
-            throw new Error("User not found.");
-        }
-
-        if (user.posts.includes(postId)) {
-            throw new Error("Post already exists in the user's posts list.");
-        }
-
-        user.posts.push(postId);
-        await user.save();
-
-        return user;
-    } catch (error) {
-        throw new Error("Failed to add post to user: " + error.message);
-    }
-};
-
-// Static method to add a post to a user's saved_posts list
-userSchema.statics.addSavedPost = async function (userId, postId) {
-    try {
-        const user = await this.findById(userId);
-
-        if (!user) {
-            throw new Error("User not found.");
-        }
-
-        if (user.saved_posts.includes(postId)) {
-            throw new Error("Post already exists in the user's saved posts list.");
-        }
-
-        user.saved_posts.push(postId);
-        await user.save();
-
-        return user;
-    } catch (error) {
-        throw new Error("Failed to add saved post to user: " + error.message);
-    }
-};
-
-// Static method to get all posts of a user
-userSchema.statics.getAllPosts = async function (userId) {
-    try {
-        const user = await this.findById(userId).populate("posts");
-        if (!user) {
-            throw new Error("User not found.");
-        }
-        return user.posts;
-    } catch (error) {
-        throw new Error("Failed to get user posts: " + error.message);
-    }
-};
-
-// Static method to get all saved posts of a user
-userSchema.statics.getAllSavedPosts = async function (userId) {
-    try {
-        const user = await this.findById(userId).populate("saved_posts");
-        if (!user) {
-            throw new Error("User not found.");
-        }
-        return user.saved_posts;
-    } catch (error) {
-        throw new Error("Failed to get user saved posts: " + error.message);
-    }
-};
-
-// Static method to get a post by ID
-userSchema.statics.getPostById = async function (userId, postId) {
-    try {
-        const user = await this.findById(userId).populate({
-            path: "posts",
-            match: { _id: postId },
-        });
-        if (!user) {
-            throw new Error("User not found.");
-        }
-        const post = user.posts.find((post) => post._id.equals(postId));
-        if (!post) {
-            throw new Error("Post not found.");
-        }
-        return post;
-    } catch (error) {
-        throw new Error("Failed to get post by ID: " + error.message);
-    }
-};
-
-// Static method to get a saved post by ID
-userSchema.statics.getSavedPostById = async function (userId, savedPostId) {
-    try {
-        const user = await this.findById(userId).populate({
-            path: "saved_posts",
-            match: { _id: savedPostId },
-        });
-        if (!user) {
-            throw new Error("User not found.");
-        }
-        const savedPost = user.saved_posts.find((savedPost) =>
-            savedPost._id.equals(savedPostId)
-        );
-        if (!savedPost) {
-            throw new Error("Saved post not found.");
-        }
-        return savedPost;
-    } catch (error) {
-        throw new Error("Failed to get saved post by ID: " + error.message);
-    }
-};
-
 //====================================================
 // Miscellaneous Methods
 //====================================================
-// Static method to search users by username and check relationship status with the session user
-userSchema.statics.searchUsers = async function (searchTerm, sessionUser) {
-    try {
-        const users = await this.find({
-            username: { $regex: searchTerm, $options: "i" },
-        });
-        // Check relationship status with the session user
-        const usersWithRelations = await Promise.all(
-            users.map(async (user) => {
-                const relation = await this.checkUserRelations(
-                    sessionUser._id,
-                    user._id
-                );
-                return {
-                    ...user.toObject(),
-                    relation,
-                };
-            })
-        );
-        return usersWithRelations;
-    } catch (error) {
-        throw new Error("Failed to search users: " + error.message);
-    }
-};
-
-// Static method to get the latest posts from friends
-userSchema.statics.getLatestFriendPosts = async function (userId, limit) {
-    try {
-        const user = await this.findById(userId);
-        if (!user) {
-            throw new Error("User not found.");
-        }
-        const friendPosts = await Post.find({ author: { $in: user.friends } })
-            .sort({ createdAt: -1 })
-            .limit(limit)
-            .populate("author", "username");
-        return friendPosts;
-    } catch (error) {
-        throw new Error("Failed to get latest friend posts: " + error.message);
-    }
-};
 
 // Static method to delete a user and their associated data
 userSchema.statics.deleteUser = async function (userId) {
     try {
-        const user = await this.findById(userId);
+        const user = await User.findById(userId);
         if (!user) {
             throw new Error("User not found.");
         }
@@ -970,10 +715,10 @@ userSchema.statics.deleteUser = async function (userId) {
         await Event.deleteMany({ participants: userId });
 
         // Delete user from friends' lists
-        await this.updateMany({ friends: userId }, { $pull: { friends: userId } });
+        await User.updateMany({ friends: userId }, { $pull: { friends: userId } });
 
         // Delete user
-        await this.findByIdAndDelete(userId);
+        await User.findByIdAndDelete(userId);
 
         return true; // Return true to indicate successful deletion
     } catch (error) {
@@ -984,7 +729,7 @@ userSchema.statics.deleteUser = async function (userId) {
 // Static method to update a user's settings
 userSchema.statics.updateSettings = async function (userId, settings) {
     try {
-        const user = await this.findByIdAndUpdate(
+        const user = await User.findByIdAndUpdate(
             userId,
             { settings },
             { new: true }

@@ -17,7 +17,7 @@ export const sessionMiddleware = session({
         secure: false,
     },
     name: 'utker',
-    secret: 'process.env.JWT_SECRET',
+    secret: 'this is secret key to encode all details',
     saveUninitialized: false,
     resave: true,
     store: store,

@@ -1,6 +1,7 @@
 import { faker } from '@faker-js/faker';
 import mongoose from 'mongoose';
 import User from './models/userModel.js';
+import Post from './models/postModel.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -19,17 +20,15 @@ const generateUsers = (count) => {
     for (let i = 0; i < count; i++) {
         const username = faker.internet.userName();
         const email = faker.internet.email();
-        const mobile = faker.phone.number('###-###-####');
-        const country = faker.location.country();
-        const gender = faker.helpers.arrayElement(['Male', 'Female']);
-        const password = faker.internet.password();
+        const bio = faker.lorem.sentence();
+        const mobile = '9876543210';
+        const country = 'USA';
+        const gender = faker.helpers.arrayElement(['male', 'female']);
+        const password = '111111';
         const dob = faker.date.past();
-        const img_url = faker.image.avatar();
-        const settings = {
-            notifications: faker.datatype.boolean(),
-            privacy: faker.helpers.arrayElement(['public', 'private']),
-        };
-        users.push({ username, email, mobile, country, gender, password, dob, img_url, settings });
+        const livesIn = faker.location.country();
+        const from = faker.location.country();
+        users.push({ username, email, mobile, country, gender, password, dob, bio, livesIn, from });
     }
     return users;
 };
@@ -39,14 +38,9 @@ const seedDatabase = async () => {
     try {
         // Clear existing data
         await User.deleteMany({});
-
-        // Generate sample data
-        const userCount = 20;
-        const postCountPerUser = 3;
-
+        const userCount = 3;
         const users = generateUsers(userCount);
-        // Create users
-        await User.create(users);
+        const createdUsers = await User.create(users);
         console.log('Sample data created successfully.');
         process.exit(0);
     } catch (error) {
