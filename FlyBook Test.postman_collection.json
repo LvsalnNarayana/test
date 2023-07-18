@@ -1,0 +1,380 @@
+{
+	"info": {
+		"name": "FlyBook Test"
+	},
+	"item": [
+		{
+			"name": "Auth",
+			"item": [
+				{
+					"name": "Login",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": "{'userData':'test1','password':'111111'}",
+						"url": "http://localhost:5000/login"
+					},
+					"response": []
+				},
+				{
+					"name": "Signup",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userData\":\"test1\",\"password\":\"111111\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "http://localhost:5000/signup"
+					},
+					"response": []
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userData\":\"test1\",\"password\":\"111111\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "http://localhost:5000/logout"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "User",
+			"item": [
+				{
+					"name": "Get User",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "http://localhost:5000/users/test2"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Notifications",
+			"item": [
+				{
+					"name": "Get Notifications",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "http://localhost:5000/notifications"
+					},
+					"response": []
+				},
+				{
+					"name": "Mark All Read",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": "http://localhost:5000/notifications/mark-all-read"
+					},
+					"response": []
+				},
+				{
+					"name": "Mark Read",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": "http://localhost:5000/notifications/64b06442ee0e36fa76974e0c/mark-read"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete All Notifications",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": "http://localhost:5000/notifications/clear-all"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Request",
+			"item": [
+				{
+					"name": "Get Pending Requests",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "http://localhost:5000/friends/get-requests"
+					},
+					"response": []
+				},
+				{
+					"name": "Send Request",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"receiverId\":\"64af0028fcb62b2d5d41e43f\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "http://localhost:5000/friends/send-request"
+					},
+					"response": []
+				},
+				{
+					"name": "Accept Request",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\":\"64af0028fcb62b2d5d41e43f\",\"requestId\":\"64afd972f2ff8a47a2980b2d\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "http://localhost:5000/friends/accept-request"
+					},
+					"response": []
+				},
+				{
+					"name": "Reject Request",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\":\"64af0028fcb62b2d5d41e43e\",\"requestId\":\"64b118a49f356ebae4e5eb9e\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "http://localhost:5000/friends/reject-request"
+					},
+					"response": []
+				},
+				{
+					"name": "Cancel Request",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\":\"64af0028fcb62b2d5d41e43f\",\"requestId\":\"64b118a49f356ebae4e5eb9e\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "http://localhost:5000/friends/cancel-request"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Post",
+			"item": [
+				{
+					"name": "Get post By Id",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": "http://localhost:5000/posts/64b3372f18ce984c004ac1c1"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Post",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"post_type\":\"friends\",\"description\":\"lorem ipsum\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "http://localhost:5000/posts/create-post"
+					},
+					"response": []
+				},
+				{
+					"name": "Like Post",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": "http://localhost:5000/posts/64b482c9522add601e9cad05/like"
+					},
+					"response": []
+				},
+				{
+					"name": "Unlike Post",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": "http://localhost:5000/posts/64b482c9522add601e9cad05/unlike"
+					},
+					"response": []
+				},
+				{
+					"name": "Save Post",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": "http://localhost:5000/posts/64b17e1ba587bbc3697708c3/save-post"
+					},
+					"response": []
+				},
+				{
+					"name": "Unsave Post",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": "http://localhost:5000/posts/64b17e1ba587bbc3697708c3/unsave-post"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Post",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"post_type\":\"onlyme\",\"description\":\"lorem ipsum 2\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "http://localhost:5000/posts/64b17e7c6f56c44b57f92afe/update"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Post",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": "http://localhost:5000/posts/64b17e7c6f56c44b57f92afe/delete"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Comments",
+			"item": [
+				{
+					"name": "Create Comment",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"comment\":\"this is a test cot\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "http://localhost:5000/posts/64b33be7de5bfac2c01d1f2b/comments/create-comment"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Comment",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"UpdatedComment\":\"this is an updated comment\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "http://localhost:5000/posts/64b17e1ba587bbc3697708c3/comments/64b26e3251c2662fccaadd76/update"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Comment",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"UpdatedComment\":\"this is an updated comment\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "http://localhost:5000/posts/64b17e1ba587bbc3697708c3/comments/64b26c167e74bfeed6e8dde8/delete"
+					},
+					"response": []
+				},
+				{
+					"name": "Like Comment",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"UpdatedComment\":\"this is an updated comment\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": "http://localhost:5000/posts/64b17e1ba587bbc3697708c3/comments/64b26e3251c2662fccaadd76/like"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Base Url",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": "http://localhost:5000"
+			},
+			"response": []
+		}
+	]
+}
