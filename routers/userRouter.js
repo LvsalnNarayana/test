@@ -1,10 +1,13 @@
 import express from 'express';
-import { getUser } from '../controllers/userController.js';
+import { getUser,getFriends } from '../controllers/userController.js';
 
 const userRouter = () => {
     const router = express.Router();
     router.get('/users/:username', (req, res) => {
         getUser(req, res);
+    });
+    router.get('/friends', (req, res) => {
+        getFriends(req, res);
     });
     router.get('', (req, res) => {
 

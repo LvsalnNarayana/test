@@ -9,7 +9,7 @@ import userValidationSchema from './utilities/userValidationSchema.js';
 
 dotenv.config();
 
-dotenv.config();
+dotenv.config(); 
 
 // Connect to MongoDB
 await mongoose.connect(process.env.MONGODB_URL, {

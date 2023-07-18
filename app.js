@@ -55,7 +55,9 @@ app.use(checkAuth, requestRouter(io));
 app.use(checkAuth, notificationRouter(io));
 app.use(checkAuth, postRouter(io));
 app.use(checkAuth, commentRouter(io))
-
+app.use('*',(req,res)=>{
+    res.status(404).send("wow")
+})
 // Start the server
 server.listen(process.env.PORT, () => {
     console.log('Server started on http://localhost:' + process.env.PORT);

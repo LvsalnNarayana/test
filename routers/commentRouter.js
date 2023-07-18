@@ -12,7 +12,7 @@ const commentRouter = (io) => {
     const router = express.Router();
 
     // GET COMMENT BY ID
-    router.get('/:postId/comments/:commentId', (req, res) => {
+    router.get('/posts/:postId/comments/:commentId', (req, res) => {
         getCommentById(req, res);
     });
 
