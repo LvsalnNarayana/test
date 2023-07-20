@@ -2,7 +2,7 @@ import User from "../models/userModel.js";
 import asyncHandler from 'express-async-handler';
 import { GetUserSockets } from "../utilities/serverStore.js";
 
-export const getUser = asyncHandler(async (req, res) => {
+export const getUser = asyncHandler(async (req, res, io) => {
     try {
         const username = req?.params?.username;
         const user = await User.findByUsername(username, req?.session?.user?.id);
@@ -15,8 +15,7 @@ export const getUser = asyncHandler(async (req, res) => {
         res.status(500).json({ status: false, message: error?.message })
     }
 });
-
-export const getFriends = asyncHandler(async (req, res) => {
+export const getFriends = asyncHandler(async (req, res, io) => {
     try {
         const user = await User.getAllFriends(req?.session?.user?.id);
         if (user) {
@@ -28,7 +27,20 @@ export const getFriends = asyncHandler(async (req, res) => {
         res.status(500).json({ status: false, message: error?.message })
     }
 });
+export const getAbout = asyncHandler(async (req, res, io) => {
+    try {
 
+    } catch (error) {
+
+    }
+})
+export const getSavedPosts = asyncHandler(async (req, res, io) => {
+    try {
+
+    } catch (error) {
+
+    }
+})
 export const unfriend = asyncHandler(async (req, res, io) => {
     const friendId = req?.params?.friendId;
     const sessionUser = req?.session?.user?.id;
@@ -46,10 +58,10 @@ export const unfriend = asyncHandler(async (req, res, io) => {
                 friendId
             );
             userSockets.forEach((socket) => {
-                io.to(socket).emit('unfriend-user', { ...unfriendData?.sessionUser, ...userRelation });
+                io.to(socket).emit('unfriend-user', { ...unfriendData?.friend, ...userRelation, id: friendId });
             })
             friendSockets.forEach((socket) => {
-                io.to(socket).emit('unfriend-friend', { ...unfriendData?.friend, ...friendRelation });
+                io.to(socket).emit('unfriend-friend', { ...unfriendData?.sessionUser, ...friendRelation, id: sessionUser });
             })
             res.status(200).json({ success: true, messgae: 'Friend Removed' });
         } else {

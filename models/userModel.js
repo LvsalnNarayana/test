@@ -269,13 +269,12 @@ userSchema.statics.loginUser = async function (userData) {
     throw new Error(error.message);
   }
 };
-// Static method to find a user by username and check relationship with the session user
 userSchema.statics.findByUsername = async function (userData, sessionUser) {
   try {
     const query = await User.findOne({
       $or: [{ username: userData }, { email: userData }],
     })
-      .populate("friends", "username friends")
+      .populate("friends", "username")
       .populate({
         path: "posts",
         match: {
@@ -286,32 +285,42 @@ userSchema.statics.findByUsername = async function (userData, sessionUser) {
         },
       })
       .exec();
+    if (!query) {
+      throw new Error("user not found")
+    }
     const user = query.toObject();
+    const friendsWithRelations = await Promise.all(
+      user?.friends?.map(async (friend) => {
+        const friendId = friend.id;
+        if (friendId !== sessionUser) {
+          const relation = await User.checkUserRelations(friendId, sessionUser);
+          return { ...friend, ...relation };
+        } else {
+          return { ...friend }
+        }
+      })
+    );
     // Loop through the posts
     user.posts = user.posts.map((post) => {
       const isPostLikedByUser = post.likes.some(
         (like) => like.toString() === sessionUser
       );
-
       const transformedComments = post.comments.map((comment) => {
         const isCommentAuthor = comment.user.id === sessionUser;
         const isCommentLikedByUser = comment.likes.some(
           (like) => like.toString() === sessionUser
         );
-
         const transformedReplies = comment.replies.map((reply) => {
           const isReplyAuthor = reply.user.id === sessionUser;
           const isReplyLikedByUser = reply.likes.some(
             (like) => like.toString() === sessionUser
           );
-
           return {
             ...reply,
             likedByUser: isReplyLikedByUser,
             author: isReplyAuthor,
           };
         });
-
         return {
           ...comment,
           likedByUser: isCommentLikedByUser,
@@ -319,7 +328,6 @@ userSchema.statics.findByUsername = async function (userData, sessionUser) {
           replies: transformedReplies,
         };
       });
-
       return {
         ...post,
         likedByUser: isPostLikedByUser,
@@ -327,19 +335,16 @@ userSchema.statics.findByUsername = async function (userData, sessionUser) {
         comments: transformedComments,
       };
     });
-
     if (user?.id !== sessionUser) {
       const relation = await User.checkUserRelations(user?.id, sessionUser);
-      return { ...user, ...relation, loggedIn: false };
+      return { ...user, friends: friendsWithRelations, ...relation, loggedIn: false };
     } else {
-      return { ...user, loggedIn: true };
+      return { ...user, friends: friendsWithRelations, loggedIn: true };
     }
   } catch (error) {
     throw new Error(error?.message);
   }
 };
-
-// Static method to search users and check relationship status with the session user
 userSchema.statics.search = async function (query, sessionUser) {
   const searchQuery = await User.find({
     $text: { $search: query, $caseSensitive: false },
@@ -362,8 +367,6 @@ userSchema.statics.search = async function (query, sessionUser) {
 
   return mappedResults;
 };
-
-// Static method to check complex relationships between two users
 userSchema.statics.checkUserRelations = async function (user1Id, sessionUser) {
   try {
     const user1 = await User.findById(user1Id)
@@ -391,10 +394,12 @@ userSchema.statics.checkUserRelations = async function (user1Id, sessionUser) {
     const sent = await Request.exists({
       sender: sessionUser,
       receiver: user1Id,
+      status: 'pending'
     });
     const received = await Request.exists({
       sender: user1Id,
       receiver: sessionUser,
+      status: 'pending'
     });
     const relation = {
       friend: isFriend,
@@ -408,11 +413,42 @@ userSchema.statics.checkUserRelations = async function (user1Id, sessionUser) {
 };
 
 //====================================================
-// Friend Methods
+// User Methods
 //====================================================
-
-// Static method to get all friends of a user
-userSchema.statics.getAllFriends = async function (sessionUser) {
+userSchema.statics.getAllFriends = async function (username, sessionUser) {
+  try {
+    const user = await User.findOne({ username })
+      .populate("friends", "username")
+      .select("friends")
+      .exec();
+    if (!user) {
+      throw new Error("User not found.");
+    }
+    const updatedFriends = await Promise.all(
+      user.toObject()?.friends.map(async (friend) => {
+        const relation = await User.checkUserRelations(friend?.id, sessionUser);
+        return { ...friend, ...relation };
+      })
+    );
+    return { id: user?.toObject()?.id, friends: updatedFriends };
+  } catch (error) {
+    throw new Error("Failed to get user friends: " + error.message);
+  }
+};
+userSchema.statics.getAbout = async function (username, sessionUser) {
+  try {
+    const user = await User.findOne({ username })
+      .select("-friends -events -settings -posts -notifications -saved_posts -placesCheckedIn -requests")
+      .exec();
+    if (!user) {
+      throw new Error("User not found.");
+    }
+    return user;
+  } catch (error) {
+    throw new Error("Failed to get user friends: " + error.message);
+  }
+};
+userSchema.statics.getPosts = async function (username,sessionUser) {
   try {
     const user = await User.findById(sessionUser)
       .populate("friends", "username")
@@ -432,12 +468,9 @@ userSchema.statics.getAllFriends = async function (sessionUser) {
     throw new Error("Failed to get user friends: " + error.message);
   }
 };
-
 //====================================================
-// Request Methods
+// Request Action Methods
 //====================================================
-
-// Static method to get all friend requests of a user
 userSchema.statics.getAllFriendRequests = async function (sessionUser) {
   try {
     const user = await User.findById(sessionUser);
@@ -468,8 +501,6 @@ userSchema.statics.getAllFriendRequests = async function (sessionUser) {
     throw new Error("Failed to get user friend requests: " + error.message);
   }
 };
-
-// Static method to send a friend request
 userSchema.statics.sendRequest = async function (requestData) {
   try {
     const sender = await User.findById(requestData.senderId).select(
@@ -500,7 +531,7 @@ userSchema.statics.sendRequest = async function (requestData) {
       }
       if (existingRequest && existingRequest?.status === "rejected") {
         const updatedRequest = await Request.findOneAndUpdate(
-          { sender: requestData.senderId, receiver: requestData.receiverId, typeId: existingRequest?.id },
+          { sender: requestData.senderId, receiver: requestData.receiverId, status: 'rejected' },
           { status: "pending" },
           { new: true }
         );
@@ -523,7 +554,6 @@ userSchema.statics.sendRequest = async function (requestData) {
     throw new Error(error.message);
   }
 };
-// Static method to accept a friend request
 userSchema.statics.acceptRequest = async function (requestData) {
   const { senderId, sessionUser } = requestData;
   try {
@@ -572,7 +602,6 @@ userSchema.statics.acceptRequest = async function (requestData) {
     throw new Error(error.message);
   }
 };
-// Static method to reject a friend request
 userSchema.statics.rejectRequest = async function (requestData) {
   const { senderId, sessionUser } = requestData;
   try {
@@ -586,7 +615,6 @@ userSchema.statics.rejectRequest = async function (requestData) {
     throw new Error("Failed to reject friend request: " + error.message);
   }
 };
-// Static method to cancel a friend request
 userSchema.statics.cancelRequest = async function (requestData) {
   const { receiverId, sessionUser } = requestData;
   try {
@@ -604,19 +632,24 @@ userSchema.statics.cancelRequest = async function (requestData) {
 };
 userSchema.statics.unfriend = async function (friendId, sessionUser) {
   try {
-    const friend = await User.findById(friendId);
-    const sessionuser = await User.findById(sessionUser);
+    const friend = await User.exists({ _id: friendId });
+    const sessionuser = await User.exists({ _id: sessionUser });
+
     if (!friend || !sessionuser) {
       throw new Error("User Not Found")
     }
+
     const pullFriend = await User.findByIdAndUpdate(friendId, {
       $pull: { friends: sessionUser },
-    }).select('friends').populate('friends', 'username').exec();
+    }, { new: true }).select('friends').populate('friends', 'username').exec();
+
     const pullSessionUser = await User.findByIdAndUpdate(sessionUser, {
       $pull: { friends: friendId },
-    }).select('friends').populate('friends', 'username').exec();
+    }, { new: true }).select('friends').populate('friends', 'username').exec();
+
     await Request.findOneAndDelete({ sender: friendId, receiver: sessionUser, status: 'accepted' });
     await Request.findOneAndDelete({ sender: sessionUser, receiver: friendId, status: 'accepted' });
+
     if (!pullFriend || !pullSessionUser) {
       throw new Error("Error Removing Friend")
     }
@@ -638,7 +671,6 @@ userSchema.statics.unfriend = async function (friendId, sessionUser) {
 
 
 
-// Static method to get a user's friend suggestions with the number of mutual friends
 userSchema.statics.getFriendSuggestions = async function (userId) {
   try {
     const user = await User.findById(userId);
@@ -665,8 +697,6 @@ userSchema.statics.getFriendSuggestions = async function (userId) {
     throw new Error("Failed to get friend suggestions: " + error.message);
   }
 };
-
-// Static method to count the number of friends for a user
 userSchema.statics.countFriends = async function (userId) {
   try {
     const user = await User.findById(userId);
@@ -684,7 +714,6 @@ userSchema.statics.countFriends = async function (userId) {
 // Event Methods
 //====================================================
 
-// Static method to add an event to a user's events list
 userSchema.statics.addEvent = async function (userId, eventId) {
   try {
     const user = await User.findById(userId);
@@ -705,8 +734,6 @@ userSchema.statics.addEvent = async function (userId, eventId) {
     throw new Error("Failed to add event to user: " + error.message);
   }
 };
-
-// Static method to get all events of a user
 userSchema.statics.getAllEvents = async function (userId) {
   try {
     const user = await User.findById(userId).populate("events");
@@ -718,8 +745,6 @@ userSchema.statics.getAllEvents = async function (userId) {
     throw new Error("Failed to get user events: " + error.message);
   }
 };
-
-// Static method to get an event by ID
 userSchema.statics.getEventById = async function (userId, eventId) {
   try {
     const user = await User.findById(userId).populate({
@@ -800,9 +825,7 @@ userSchema.statics.deleteAllNotifications = async function (userId) {
   } catch (error) {
     throw new Error(error?.message);
   }
-};
-// Static method to get a notification by ID
-userSchema.statics.getNotificationById = async function (
+}; userSchema.statics.getNotificationById = async function (
   userId,
   notificationId
 ) {

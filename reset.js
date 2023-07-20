@@ -37,6 +37,24 @@ const resetDatabase = async () => {
             gender: 'male',
             password: '111111',
             dateOfBirth: new Date("1995-04-03"),
+        },
+        {
+            username: 'test3',
+            email: 'test3@test.com',
+            mobile: '9876543111',
+            country: 'usa',
+            gender: 'male',
+            password: '111111',
+            dateOfBirth: new Date("1995-04-03"),
+        },
+        {
+            username: 'test4',
+            email: 'test4@test.com',
+            mobile: '9876543111',
+            country: 'usa',
+            gender: 'male',
+            password: '111111',
+            dateOfBirth: new Date("1995-04-03"),
         }
     ]
     try {

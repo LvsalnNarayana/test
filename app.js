@@ -23,7 +23,7 @@ connectDB(process.env.MONGODB_URL);
 const app = express();
 const server = createServer(app);
 const io = registerSocket(server);
-app.use(helmet())
+// app.use(helmet())
 app.use(sessionMiddleware);
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
