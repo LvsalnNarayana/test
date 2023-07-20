@@ -40,7 +40,7 @@ const seedDatabase = async () => {
         await User.deleteMany({});
         const userCount = 3;
         const users = generateUsers(userCount);
-        const createdUsers = await User.create(users);
+        await User.create(users);
         console.log('Sample data created successfully.');
         process.exit(0);
     } catch (error) {

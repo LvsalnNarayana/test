@@ -3,24 +3,28 @@ import asyncHandler from "express-async-handler";
 import { GetUserSockets } from "../utilities/serverStore.js";
 
 export const sendRequest = asyncHandler(async (req, res, io) => {
+  const sessionUser = req?.session?.user?.id;
+  const receiverId = req?.body?.receiverId;
   try {
-    const requestData = {
-      senderId: req?.session?.user?.id,
-      receiverId: req?.body?.receiverId,
-    };
+    const requestData = { senderId: sessionUser, receiverId };
     const requestResult = await User.sendRequest(requestData);
-    const sockets = GetUserSockets(req?.session?.user?.id);
-    const receiverSockets = GetUserSockets(req?.body?.receiverId);
-    const relation = await User.checkUserRelations(
-      req?.body?.receiverId,
-      req?.session?.user?.id
-    );
+    const sockets = GetUserSockets(sessionUser);
+    const receiverSockets = GetUserSockets(receiverId);
     if (requestResult) {
+      const userRelation = await User.checkUserRelations(
+        receiverId,
+        sessionUser
+      );
+      const receiverRelation = await User.checkUserRelations(
+        sessionUser,
+        receiverId
+      );
       receiverSockets.forEach((socket) => {
-        io.to(socket).emit("request-received", requestResult?.notification);
+        io.to(socket).emit("request-sent-notification", requestResult?.notification);
+        io.to(socket).emit("request-sent-receiver", receiverRelation);
       });
       sockets.forEach((socket) => {
-        io.to(socket).emit("request-sent", relation);
+        io.to(socket).emit("request-sent-user", userRelation);
       });
       res.status(200).json(requestResult?.request);
     } else {
@@ -33,16 +37,37 @@ export const sendRequest = asyncHandler(async (req, res, io) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
-export const acceptRequest = asyncHandler(async (req, res) => {
+export const acceptRequest = asyncHandler(async (req, res, io) => {
+  const senderId = req?.body?.senderId;
+  const sessionUser = req?.session?.user?.id;
   const requestData = {
-    senderId: req?.body?.senderId,
-    sessionUser: req?.session?.user?.id,
-    requestId: req?.body?.requestId,
+    senderId: senderId,
+    sessionUser: sessionUser,
   };
+
   try {
-    const request = await User.acceptRequest(requestData);
-    if (request) {
-      res.status(200).json(request);
+    const requestResult = await User.acceptRequest(requestData);
+    const userFriends = await User.findById(sessionUser).populate('friends', 'username').select('friends')
+    const senderFriends = await User.findById(senderId).populate('friends', 'username').select('friends')
+    const senderSockets = GetUserSockets(senderId);
+    const userSockets = GetUserSockets(sessionUser);
+    if (requestResult?.request?.status === 'accepted') {
+      const userRelation = await User.checkUserRelations(
+        senderId,
+        sessionUser
+      );
+      const senderRelation = await User.checkUserRelations(
+        sessionUser,
+        senderId
+      );
+      userSockets.forEach((socket) => {
+        io.to(socket).emit("request-accepted-user", { ...userRelation, friends: userFriends?.friends });
+      });
+      senderSockets.forEach((socket) => {
+        io.to(socket).emit("request-accepted-sender", { ...senderRelation, friends: senderFriends?.friends });
+        io.to(socket).emit("request-accepted-notification", requestResult?.notification);
+      });
+      res.status(200).json(requestResult?.request);
     } else {
       res.status(500).json({
         success: false,
@@ -54,21 +79,30 @@ export const acceptRequest = asyncHandler(async (req, res) => {
   }
 });
 export const rejectRequest = asyncHandler(async (req, res) => {
+  const senderId = req?.body?.senderId;
+  const sessionUser = req?.session?.user?.id;
   const requestData = {
-    senderId: req?.body?.senderId,
-    sessionUser: req?.session?.user?.id,
-    requestId: req?.body?.requestId,
+    senderId: senderId,
+    sessionUser: sessionUser,
   };
   try {
     const request = await User.rejectRequest(requestData);
-    const senderSockets = GetUserSockets(req?.body?.senderId);
-    const relation = await User.checkUserRelations(
-      req?.body?.senderId,
-      req?.session?.user?.id
+    const senderSockets = GetUserSockets(senderId);
+    const userSockets = GetUserSockets(sessionUser);
+    const userRelation = await User.checkUserRelations(
+      senderId,
+      sessionUser
+    );
+    const senderRelation = await User.checkUserRelations(
+      sessionUser,
+      senderId
     );
     if (request) {
+      userSockets.forEach((socket) => {
+        io.to(socket).emit("request-rejected-user", userRelation);
+      });
       senderSockets.forEach((socket) => {
-        io.to(socket).emit("request-received", relation);
+        io.to(socket).emit("request-rejected-sender", senderRelation);
       });
       res.status(200).json(request);
     } else {
@@ -85,15 +119,32 @@ export const rejectRequest = asyncHandler(async (req, res) => {
   }
 });
 export const cancelRequest = asyncHandler(async (req, res) => {
+  const receiverId = req?.body?.receiverId;
+  const sessionUser = req?.session?.user?.id;
   const requestData = {
-    userId: req?.body?.userId,
-    sessionUser: req?.session?.user?.id,
-    requestId: req?.body?.requestId,
+    receiverId: receiverId,
+    sessionUser: sessionUser,
   };
   try {
-    const request = await User.cancelRequest(requestData);
-    if (request) {
-      res.status(200).json({ success: request });
+    const cancelledRequest = await User.cancelRequest(requestData);
+    const sockets = GetUserSockets(sessionUser);
+    const receiverSockets = GetUserSockets(receiverId);
+    const userRelation = await User.checkUserRelations(
+      receiverId,
+      sessionUser
+    );
+    const receiverRelation = await User.checkUserRelations(
+      sessionUser,
+      receiverId
+    );
+    if (cancelledRequest) {
+      sockets.forEach((socket) => {
+        io.to(socket).emit("request-cancelled-user", userRelation);
+      });
+      receiverSockets.forEach((socket) => {
+        io.to(socket).emit("request-cancelled", receiverRelation);
+      });
+      res.status(200).json({ success: cancelledRequest });
     } else {
       res.status(500).json({
         success: false,

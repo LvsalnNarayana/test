@@ -79,7 +79,7 @@ export const likePost = asyncHandler(async (req, res, io) => {
         if (updatedPost) {
             if (notificationSockets) {
                 notificationSockets.forEach((socket) => {
-                    io.to(socket).emit('notification-update', { ...updatedPost?.notification.toObject() });
+                    io.to(socket).emit('', { ...updatedPost?.notification.toObject() });
                 })
             }
             sockets.forEach(socket => {

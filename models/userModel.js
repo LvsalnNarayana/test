@@ -486,69 +486,85 @@ userSchema.statics.sendRequest = async function (requestData) {
     }
     const existingRequest = await Request.findOne({
       sender: requestData.senderId,
-      receiver: requestData.receiverId,
-      status: "rejected",
+      receiver: requestData.receiverId
     });
+    const existingNotification = await Notification.findOne({ userId: receiver?.id, typeId: existingRequest?.id, sender: sender?.username })
     const notificationData = {
       message: sender?.toObject()?.username + " has sent you friend request",
       userId: receiver?.id,
       sender: sender?.username,
     };
-    if (existingRequest && existingRequest?.status === "rejected") {
-      const updateRequest = await Request.findOneAndUpdate(
-        { sender: requestData.senderId, receiver: requestData.receiverId },
-        { status: "pending" },
-        { new: true }
-      );
-      const updatedNotification = await Notification.createRequestNotification({
+    if (existingRequest) {
+      if (existingRequest && existingRequest?.status === 'pending') {
+        return { request: existingRequest, notification: existingNotification }
+      }
+      if (existingRequest && existingRequest?.status === "rejected") {
+        const updatedRequest = await Request.findOneAndUpdate(
+          { sender: requestData.senderId, receiver: requestData.receiverId, typeId: existingRequest?.id },
+          { status: "pending" },
+          { new: true }
+        );
+        const updatedNotification = await Notification.createRequestNotification({
+          ...notificationData,
+          typeId: updatedRequest?.id,
+        });
+        return { request: updatedRequest, notification: updatedNotification };
+      }
+    } else {
+      const newRequest = await Request.createRequest(requestData);
+      const newNotification = await Notification.createRequestNotification({
         ...notificationData,
-        typeId: updateRequest?.id,
+        typeId: newRequest?.id,
       });
-      return { request: updateRequest, notification: updatedNotification };
+      return { request: newRequest, notification: newNotification };
     }
-    const newRequest = await Request.createRequest(requestData);
-    const newNotification = await Notification.createRequestNotification({
-      ...notificationData,
-      typeId: newRequest?.id,
-    });
-    return { request: newRequest, notification: newNotification };
+
   } catch (error) {
     throw new Error(error.message);
   }
 };
-
 // Static method to accept a friend request
 userSchema.statics.acceptRequest = async function (requestData) {
-  const { senderId, sessionUser, requestId } = requestData;
+  const { senderId, sessionUser } = requestData;
   try {
     if (senderId !== sessionUser) {
       const sender = await User.findById(senderId).select("username");
       const receiver = await User.findById(sessionUser).select("username");
       const request = await Request.findOneAndUpdate(
-        { sender: senderId, receiver: sessionUser, _id: requestId },
+        { sender: senderId, receiver: sessionUser, status: 'pending' },
         { status: "accepted" },
         { new: true }
       );
+      if (!sender) {
+        throw new Error("Sender User Not Found");
+      }
+      if (!receiver) {
+        throw new Error("Receiver User Not Found");
+      }
+      if (!request) {
+        throw new Error("Request Not Found");
+      }
       if (sender && receiver && request) {
         const notificationData = {
-          message:
-            receiver?.toObject()?.username +
-            " has aceepted your friend request",
-          typeId: requestId,
+          message: receiver?.toObject()?.username + " has aceepted your friend request",
+          typeId: request?.id,
           userId: sender?.id,
           sender: receiver?.username,
         };
-        await Notification.createRequestNotification(notificationData);
-        await User.findByIdAndUpdate(senderId, {
+        const notification = await Notification.createRequestNotification(notificationData);
+        const senderResult = await User.findByIdAndUpdate(senderId, {
           $addToSet: { friends: sessionUser },
         });
-        await User.findByIdAndUpdate(sessionUser, {
+        const userResult = await User.findByIdAndUpdate(sessionUser, {
           $addToSet: { friends: senderId },
         });
+        if (!senderResult || !userResult) {
+          throw new Error("Error Aceepting Request");
+        }
+        return { request: request, notification: notification }
       } else {
-        throw new Error("Request Not Found");
+        throw new Error("Error Aceepting Request");
       }
-      return request;
     } else {
       throw new Error("sessionUser and UserId are same");
     }
@@ -556,13 +572,12 @@ userSchema.statics.acceptRequest = async function (requestData) {
     throw new Error(error.message);
   }
 };
-
 // Static method to reject a friend request
 userSchema.statics.rejectRequest = async function (requestData) {
-  const { senderId, sessionUser, requestId } = requestData;
+  const { senderId, sessionUser } = requestData;
   try {
     const rejected_request = await Request.findOneAndUpdate(
-      { sender: senderId, receiver: sessionUser, _id: requestId },
+      { sender: senderId, receiver: sessionUser, status: 'pending' },
       { status: "rejected" },
       { new: true }
     );
@@ -571,22 +586,57 @@ userSchema.statics.rejectRequest = async function (requestData) {
     throw new Error("Failed to reject friend request: " + error.message);
   }
 };
-
 // Static method to cancel a friend request
 userSchema.statics.cancelRequest = async function (requestData) {
-  const { userId, sessionUser, requestId } = requestData;
+  const { receiverId, sessionUser } = requestData;
   try {
-    await Request.findOneAndDelete({ sender: sessionUser, receiver: userId });
+    const request = await Request.findOne({ sender: sessionUser, receiver: receiverId, status: 'pending' });
     await Notification.findOneAndDelete({
-      typeId: requestId,
-      userId: userId,
+      typeId: request?.id,
+      userId: receiverId,
       type: "request",
     });
+    await Request.findOneAndDelete({ sender: sessionUser, receiver: receiverId, status: 'pending' });
     return true;
   } catch (error) {
     throw new Error("Failed to cancel friend request: " + error.message);
   }
 };
+userSchema.statics.unfriend = async function (friendId, sessionUser) {
+  try {
+    const friend = await User.findById(friendId);
+    const sessionuser = await User.findById(sessionUser);
+    if (!friend || !sessionuser) {
+      throw new Error("User Not Found")
+    }
+    const pullFriend = await User.findByIdAndUpdate(friendId, {
+      $pull: { friends: sessionUser },
+    }).select('friends').populate('friends', 'username').exec();
+    const pullSessionUser = await User.findByIdAndUpdate(sessionUser, {
+      $pull: { friends: friendId },
+    }).select('friends').populate('friends', 'username').exec();
+    await Request.findOneAndDelete({ sender: friendId, receiver: sessionUser, status: 'accepted' });
+    await Request.findOneAndDelete({ sender: sessionUser, receiver: friendId, status: 'accepted' });
+    if (!pullFriend || !pullSessionUser) {
+      throw new Error("Error Removing Friend")
+    }
+    const updatedFriend = await Promise.all(pullFriend?.toObject()?.friends.map(async (friend) => {
+      const relation = await User.checkUserRelations(friend?.id, pullFriend?.toObject()?.id);
+      return { ...friend, ...relation };
+    }));
+
+    const updatedSessionUser = await Promise.all(pullSessionUser?.toObject()?.friends.map(async (friend) => {
+      const relation = await User.checkUserRelations(friend?.id, sessionUser);
+      return { ...friend, ...relation };
+    }));
+    console.log({ friend: { ...pullFriend.toObject(), friends: updatedFriend }, sessionUser: { ...pullSessionUser.toObject(), friends: updatedSessionUser } });
+    return { friend: { ...pullFriend.toObject(), friends: updatedFriend }, sessionUser: { ...pullSessionUser.toObject(), friends: updatedSessionUser } };
+  } catch (error) {
+    throw new Error(error?.message)
+  }
+}
+
+
 
 // Static method to get a user's friend suggestions with the number of mutual friends
 userSchema.statics.getFriendSuggestions = async function (userId) {
